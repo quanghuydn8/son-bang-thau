@@ -120,7 +120,7 @@
     nd.innerHTML = `
       <div class="phieu">
         <div class="o"><b>${f.tong}</b><span>gói (${f.moi} mới, ${f.sua_doi} sửa đổi)</span></div>
-        <div class="o"><b>${f.qua_loc_tho}</b><span>qua lọc thô (${f.qua_hang_hoa} hàng hóa, ${f.qua_hon_hop} hỗn hợp)</span></div>
+        <div class="o"><b>${f.qua_loc_tho}</b><span>qua lọc thô${f.qua_hang_hoa === undefined ? "" : ` (${f.qua_hang_hoa} hàng hóa, ${f.qua_hon_hop} hỗn hợp)`}</span></div>
         <div class="o"><b>${f.loai_theo_truong.vung}</b><span>ngoài vùng</span></div>
         <div class="o"><b>${f.loai_theo_truong.linh_vuc}</b><span>sai lĩnh vực</span></div>
         <div class="o"><b>${f.loai_theo_truong.han}</b><span>hạn gấp</span></div>
