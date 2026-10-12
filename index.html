@@ -100,7 +100,7 @@
       <div class="dong"><span>${thoat(g.ma_tbmt)}-${thoat(g.phien_ban)}</span><span>${thoat(g.ben_moi)}</span></div>
       <div class="dong"><span>${thoat(g.dia_diem.join(", "))}</span>
         <span>${thoat(g.linh_vuc.map((l) => TEN_LV[l] ?? l).join(", "))}</span>
-        <span>${tien(g.gia)}</span><span>đóng ${ngayGio(g.han_dong)}</span></div>
+        <span>${tien(g.gia)}</span><span>đóng ${thoat(ngayGio(g.han_dong))}</span></div>
       ${g.ghi_chu?.length ? `<div class="ghi">${thoat(g.ghi_chu.join(" · "))}</div>` : ""}
       ${g.ly_do?.length ? `<div class="lydo">${thoat(g.ly_do.map((l) => l.chu).join(" · "))}</div>` : ""}
     </div>`;
@@ -120,7 +120,7 @@
     nd.innerHTML = `
       <div class="phieu">
         <div class="o"><b>${f.tong}</b><span>gói (${f.moi} mới, ${f.sua_doi} sửa đổi)</span></div>
-        <div class="o"><b>${f.qua_loc_tho}</b><span>qua lọc thô</span></div>
+        <div class="o"><b>${f.qua_loc_tho}</b><span>qua lọc thô (${f.qua_hang_hoa} hàng hóa, ${f.qua_hon_hop} hỗn hợp)</span></div>
         <div class="o"><b>${f.loai_theo_truong.vung}</b><span>ngoài vùng</span></div>
         <div class="o"><b>${f.loai_theo_truong.linh_vuc}</b><span>sai lĩnh vực</span></div>
         <div class="o"><b>${f.loai_theo_truong.han}</b><span>hạn gấp</span></div>
