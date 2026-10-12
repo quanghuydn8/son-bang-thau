@@ -49,12 +49,46 @@
     .loc button { font: inherit; font-size: 13px; padding: 3px 10px; border-radius: 99px;
       border: 1px solid var(--vien); background: var(--the); color: var(--chu); cursor: pointer; }
     .loc button[aria-pressed="true"] { border-color: var(--nhan); color: var(--nhan); }
+    .nhom { font-size: 12px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--vien); color: var(--phu); }
+    .ct { margin-top: 6px; font-size: 14px; }
+    .ct summary { font-weight: 500; color: var(--nhan); }
+    .tc { border-top: 1px solid var(--vien); padding: 8px 0; }
+    .tc .dau { font-weight: 600; }
+    .tc .trich { white-space: pre-wrap; background: var(--nen); border-radius: 6px; padding: 6px 8px; margin: 4px 0; }
+    .tc .vt { color: var(--phu); font-size: 12px; }
+    .tc img { max-width: 100%; border: 1px solid var(--vien); border-radius: 6px; margin-top: 4px; }
+    .tc .khong { color: var(--vang); font-size: 13px; }
+    .bangy { overflow-x: auto; }
+    .bangy table { border-collapse: collapse; font-size: 13px; min-width: 560px; }
+    .bangy td, .bangy th { border: 1px solid var(--vien); padding: 4px 6px; text-align: left; vertical-align: top; }
+    .bangy td.so { text-align: right; font-variant-numeric: tabular-nums; }
+    .kl { font-size: 12px; font-weight: 600; padding: 0 6px; border-radius: 4px; border: 1px solid currentColor; }
+    .kl.dat { color: var(--qua); } .kl.khong_dat { color: var(--loai); }
+    .kl.khong_chac { color: var(--vang); } .kl.khong_yeu_cau, .kl.nguoi_xem, .kl.chua_co_data { color: var(--phu); }
+    .pn { font-size: 13px; margin: 4px 0 0 0; padding-left: 10px; border-left: 2px solid var(--vien); }
+    .pn .ng { color: var(--phu); font-size: 12px; }
+    .tom { margin: 6px 0; }
+    .tab { display: flex; gap: 6px; margin-bottom: 12px; }
+    .tab button { font: inherit; padding: 6px 12px; border-radius: 99px; border: 1px solid var(--vien);
+      background: var(--the); color: var(--chu); cursor: pointer; }
+    .tab button[aria-selected="true"] { border-color: var(--nhan); color: var(--nhan); font-weight: 600; }
+    .ph { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+    .ph button { font: inherit; font-size: 13px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--vien);
+      background: var(--the); color: var(--chu); cursor: pointer; }
+    .ph button.chon { border-color: var(--nhan); color: var(--nhan); font-weight: 600; }
+    .ph input { font: inherit; font-size: 13px; flex: 1 1 180px; min-width: 0; padding: 3px 8px;
+      border: 1px solid var(--vien); border-radius: 6px; background: var(--the); color: var(--chu); }
+    .ph .tt { font-size: 12px; color: var(--phu); width: 100%; }
   </style>
 </head>
 <body>
 <main>
   <h1>Bảng thầu</h1>
-  <div class="ngay">
+  <div class="tab" role="tablist">
+    <button id="tab-ngay" role="tab" aria-selected="true">Theo ngày</button>
+    <button id="tab-chon" role="tab" aria-selected="false">Đã chọn làm</button>
+  </div>
+  <div class="ngay" id="chon-ngay-hang">
     <button id="truoc" aria-label="Ngày trước">‹</button>
     <input id="chon-ngay" type="date">
     <button id="sau" aria-label="Ngày sau">›</button>
@@ -65,21 +99,55 @@
   // Địa chỉ cổng thầu (không bí mật). Mã bí mật nằm trong link: #ngay=YYYY-MM-DD&k=<mã>.
   const CONG = "https://jfflejpfkxwlpxqryksb.supabase.co/functions/v1/cong-thau";
   const TEN_LV = { HH: "Hàng hóa", HON_HOP: "Hỗn hợp", XL: "Xây lắp", TV: "Tư vấn", PTV: "Phi tư vấn" };
-  const TEN_TRUONG = { vung: "Ngoài vùng", linh_vuc: "Lĩnh vực", han: "Hạn gấp" };
+  const TEN_TRUONG = { vung: "Ngoài vùng", linh_vuc: "Lĩnh vực", gia: "Quá giá", han: "Hạn gấp" };
+  const TEN_NHOM = { co_tieu_chi: "Có tiêu chí năng lực", khong_yeu_cau: "Không yêu cầu năng lực",
+    hsmt_file: "HSMT dạng file", khong_doc_duoc: "Không đọc được Chương III" };
+  const so = (v) => v == null ? "" : Number(v).toLocaleString("vi-VN");
+  const TEN_KL = { dat: "Đạt", khong_dat: "Không đạt", khong_chac: "Không chắc", khong_yeu_cau: "Không yêu cầu năng lực",
+    nguoi_xem: "Người tự xem", chua_co_data: "Chưa có data" };
+  const nhanKL = (k) => k ? `<span class="kl ${thoat(k)}">${thoat(TEN_KL[k] ?? k)}</span>` : "";
   const $ = (id) => document.getElementById(id);
   const thoat = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   function docHash() {
     const p = new URLSearchParams(location.hash.slice(1));
-    return { ngay: p.get("ngay"), k: p.get("k") };
+    return { ngay: p.get("ngay"), k: p.get("k"), xem: p.get("xem") };
+  }
+  function datHash(them) {
+    const h = docHash();
+    const p = new URLSearchParams({ k: h.k ?? "" });
+    const v = { ngay: h.ngay, xem: h.xem, ...them };
+    if (v.ngay) p.set("ngay", v.ngay);
+    if (v.xem) p.set("xem", v.xem);
+    location.hash = p.toString();
+  }
+  async function goiCong(duong, than) {
+    const res = await fetch(`${CONG}${duong}`, {
+      method: than ? "POST" : "GET",
+      headers: { "x-ma-bi-mat": docHash().k, ...(than ? { "content-type": "application/json" } : {}) },
+      body: than ? JSON.stringify(than) : undefined,
+    });
+    if (res.status === 401) throw new Error("Mã trong link không đúng.");
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.loi ?? `Máy chủ trả lỗi ${res.status}.`);
+    return j;
+  }
+  async function taiDaChon(k) {
+    const nd = $("noi-dung");
+    if (!k) return nd.innerHTML = `<div class="bao loi">Link thiếu mã. Mở lại link trong tin Telegram.</div>`;
+    nd.innerHTML = `<div class="bao">Đang tải…</div>`;
+    try {
+      const { goi } = await goiCong("/da-chon");
+      nd.innerHTML = `<h2>Đã chọn làm (${goi.length})</h2>` +
+        (goi.map((g) => theGoi({ ...g, qua: true })).join("") || `<div class="bao">Chưa chọn gói nào.</div>`);
+    } catch (e) {
+      nd.innerHTML = `<div class="bao loi">Không tải được: ${thoat(e.message)}</div>`;
+    }
   }
   function homNayVN() {
     return new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
   }
-  function doiNgay(ngay) {
-    const { k } = docHash();
-    location.hash = new URLSearchParams({ ngay, k: k ?? "" }).toString();
-  }
+  function doiNgay(ngay) { datHash({ ngay }); }
   function congNgay(ngay, n) {
     const d = new Date(ngay + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n);
     return d.toISOString().slice(0, 10);
@@ -96,33 +164,102 @@
   function theGoi(g) {
     const sua = g.phien_ban !== "00" ? ` <span class="nhan sua">sửa đổi ${thoat(g.phien_ban)}</span>` : "";
     return `<div class="goi">
-      <div class="ten">${thoat(g.ten)}${sua}</div>
+      <div class="ten">${g.ket_luan ? nhanKL(g.ket_luan) + " " : ""}${thoat(g.ten)}${sua}</div>
       <div class="dong"><span>${thoat(g.ma_tbmt)}-${thoat(g.phien_ban)}</span><span>${thoat(g.ben_moi)}</span></div>
       <div class="dong"><span>${thoat(g.dia_diem.join(", "))}</span>
         <span>${thoat(g.linh_vuc.map((l) => TEN_LV[l] ?? l).join(", "))}</span>
         <span>${tien(g.gia)}</span><span>đóng ${thoat(ngayGio(g.han_dong))}</span></div>
       ${g.ghi_chu?.length ? `<div class="ghi">${thoat(g.ghi_chu.join(" · "))}</div>` : ""}
       ${g.ly_do?.length ? `<div class="lydo">${thoat(g.ly_do.map((l) => l.chu).join(" · "))}</div>` : ""}
+      ${g.tai_file ? `<div class="ghi">${thoat(g.tai_file.mo_ta)}</div>` : ""}
+      ${g.qua ? nutPhanHoi(g) : ""}
+      ${g.qua ? `<details class="ct" data-ma="${thoat(g.ma_tbmt)}" data-pb="${thoat(g.phien_ban)}">
+        <summary>Chương III ${g.nhom ? `<span class="nhom">${thoat(TEN_NHOM[g.nhom] ?? g.nhom)}</span>` : "<span class=\"nhom\">chưa đọc</span>"}</summary>
+        <div class="noi">Đang tải…</div></details>` : ""}
     </div>`;
+  }
+
+  const TEN_PH = { lam: "Làm", bo: "Bỏ", may_sai: "Máy sai" };
+  /** Nút Làm / Bỏ / Máy sai + ô ghi chú; dòng nhỏ hiện phản hồi mới nhất (ai bấm, lúc nào, ở đâu). */
+  function nutPhanHoi(g) {
+    const p = g.phan_hoi;
+    return `<div class="ph" data-ma="${thoat(g.ma_tbmt)}" data-pb="${thoat(g.phien_ban)}">
+      ${Object.entries(TEN_PH).map(([k, t]) => `<button data-loai="${k}" class="${p?.loai === k ? "chon" : ""}">${t}</button>`).join("")}
+      <input placeholder="Ghi chú (Máy sai thì bắt buộc)" value="${thoat(p?.ghi_chu ?? "")}">
+      <div class="tt">${p ? `Đã chọn ${thoat(TEN_PH[p.loai])} lúc ${thoat(ngayGio(lucVN(p.luc)))}${p.nguon === "claude" ? " (qua Claude)" : ""}${p.ghi_chu ? ` — ${thoat(p.ghi_chu)}` : ""}` : ""}</div>
+    </div>`;
+  }
+  /** ISO UTC → "YYYY-MM-DDTHH:MM" giờ VN (để ngayGio cắt). */
+  function lucVN(iso) { return new Date(Date.parse(iso) + 7 * 3600e3).toISOString(); }
+
+  /** Chi tiết Chương III một gói: tiêu chí kèm trích dẫn, vị trí, ảnh; Bảng Y; file Mục 3. */
+  function veChuong(du) {
+    const c = du.chuong_iii;
+    if (!c || c.trang_thai === "cho_doc") return `<div class="bao">Chưa đọc xong Chương III.</div>`;
+    const dc = du.doi_chieu;
+    let h = dc ? `<div class="tom">${nhanKL(dc.ket_luan)} ${thoat(dc.ly_do)}${dc.nam_xet ? ` <span class="vt">(năm tài chính xét: ${dc.nam_xet})</span>` : ""}</div>` : "";
+    h += `<div class="vt">${thoat(c.ly_do_nhom ?? "")}</div>`;
+    // Kết luận từng pháp nhân cho một hàng, kèm phép tính và dòng data năng lực đã dùng.
+    const theoHang = (hang) => (dc?.phap_nhan ?? []).map((p) => {
+      if (p.trang_thai === "chua_co_data") return "";
+      const x = p.hang.find((y) => y.hang === hang);
+      if (!x) return "";
+      return `<div class="pn"><b>${thoat(p.ten)}</b> ${nhanKL(x.ket_luan)} ${thoat(x.phep_tinh ?? x.ly_do)}
+        ${x.nguon.length ? `<div class="ng">Data năng lực: ${x.nguon.map((n) => `${thoat(n.tab)} dòng ${n.dong} · ${thoat(n.cot)} = ${thoat(n.gia_tri || "trống")}`).join(" | ")}</div>` : ""}</div>`;
+    }).join("");
+    const chuaCo = (dc?.phap_nhan ?? []).filter((p) => p.trang_thai === "chua_co_data").map((p) => p.ten);
+    for (const t of c.tieu_chi ?? []) {
+      if (!t.bat) continue;
+      h += `<div class="tc"><div class="dau">${thoat(t.hang === "sx" ? "" : t.hang + ". ")}${thoat(t.ten)}</div>
+        ${t.trich ? `<div class="trich">${thoat(t.trich)}</div>` : ""}
+        <div class="vt">${thoat(t.vi_tri)}</div>
+        ${t.doc_duoc ? "" : `<div class="khong">Máy không đọc chắc: ${thoat(t.ly_do)}</div>`}
+        ${t.anh ? `<a href="${thoat(t.anh.url)}" target="_blank" rel="noopener"><img loading="lazy" alt="Ảnh chụp HSMT" src="${thoat(t.anh.url)}"></a>` : ""}
+        ${t.anh_loi ? `<div class="khong">${thoat(t.anh_loi)}</div>` : ""}
+        ${theoHang(t.hang)}</div>`;
+    }
+    if (chuaCo.length) h += `<div class="tc vt">${thoat(chuaCo.join(", "))}: chưa có data năng lực, chưa đối chiếu.</div>`;
+    if (c.bang_y?.length) {
+      h += `<div class="tc"><div class="dau">Bảng Y (${c.bang_y.length} dòng)</div><div class="bangy"><table>
+        <tr><th>#</th><th>Hàng hóa</th><th>Mã HS</th><th>Lĩnh vực</th><th>Giá trị tương tự</th><th>Năng lực SX</th></tr>
+        ${c.bang_y.map((d) => `<tr><td>${thoat(d.stt)}</td><td>${thoat(d.ten)}</td><td>${thoat(d.ma_hs ?? "—")}</td>
+          <td>${thoat(d.linh_vuc)}</td><td class="so">${d.doc_duoc ? so(d.gia_tri) : `<span class="khong">${thoat(d.gia_tri_tho || "trống")}</span>`}</td>
+          <td>${thoat(d.nang_luc_sx ?? "")}</td></tr>`).join("")}</table></div></div>`;
+    }
+    if (c.file_muc3?.length) {
+      h += `<div class="tc"><div class="dau">Mục 3 (kỹ thuật) — tự đọc trên muasamcong</div>
+        ${c.file_muc3.map((f) => `<div>${thoat(f.ten)}</div>`).join("")}</div>`;
+    }
+    return h;
   }
 
   function ve(du) {
     const nd = $("noi-dung");
     const p = du.phien;
     if (!p) return nd.innerHTML = `<div class="bao">Ngày này chưa quét.</div>`;
-    if (p.trang_thai === "dang_chay") return nd.innerHTML = `<div class="bao">Phiên quét đang chạy…</div>`;
-    if (p.trang_thai === "loi") {
-      return nd.innerHTML = `<div class="bao loi">Phiên quét lỗi: ${thoat(p.ly_do_loi)}</div>`;
-    }
-    const f = p.phieu;
-    const qua = du.goi.filter((g) => g.qua);
+    // Báo trạng thái lần quét mới nhất; các lần trước trong ngày đã xong thì vẫn hiện kết quả bên dưới.
+    const bao = p.trang_thai === "dang_chay" ? `<div class="bao">Lần quét mới nhất đang chạy…</div>`
+      : p.trang_thai === "loi" ? `<div class="bao loi">Lần quét mới nhất lỗi: ${thoat(p.ly_do_loi)}</div>` : "";
+    // Phễu cả ngày (cộng các lần quét xong); mỗi gói chỉ nằm ở lần quét đã xét nó.
+    const f = du.phieu_ngay ?? p.phieu;
+    if (!f) return nd.innerHTML = bao;
+    const lan = (du.cac_phien?.length ?? 1) > 1 ? ` · ${du.cac_phien.length} lần quét` : "";
+    const THU_TU = { dat: 0, khong_chac: 1, khong_yeu_cau: 2, khong_dat: 3 };
+    const qua = du.goi.filter((g) => g.qua)
+      .sort((a, b) => (THU_TU[a.ket_luan] ?? 4) - (THU_TU[b.ket_luan] ?? 4));
     const loai = du.goi.filter((g) => !g.qua);
-    nd.innerHTML = `
+    nd.innerHTML = `${bao}
       <div class="phieu">
-        <div class="o"><b>${f.tong}</b><span>gói (${f.moi} mới, ${f.sua_doi} sửa đổi)</span></div>
+        <div class="o"><b>${f.tong}</b><span>gói (${f.moi} mới, ${f.sua_doi} sửa đổi${f.da_xet ? `, bỏ qua ${f.da_xet} đã xét trước` : ""})${lan}</span></div>
         <div class="o"><b>${f.qua_loc_tho}</b><span>qua lọc thô${f.qua_hang_hoa === undefined ? "" : ` (${f.qua_hang_hoa} hàng hóa, ${f.qua_hon_hop} hỗn hợp)`}</span></div>
+        ${f.dat === undefined ? "" : `
+        <div class="o"><b style="color:var(--qua)">${f.dat}</b><span>đạt</span></div>
+        <div class="o"><b style="color:var(--vang)">${f.khong_chac}</b><span>không chắc</span></div>
+        <div class="o"><b>${f.khong_dat}</b><span>không đạt</span></div>
+        <div class="o"><b>${f.khong_yeu_cau}</b><span>không yêu cầu năng lực</span></div>`}
         <div class="o"><b>${f.loai_theo_truong.vung}</b><span>ngoài vùng</span></div>
         <div class="o"><b>${f.loai_theo_truong.linh_vuc}</b><span>sai lĩnh vực</span></div>
+        <div class="o"><b>${f.loai_theo_truong.gia ?? 0}</b><span>quá giá</span></div>
         <div class="o"><b>${f.loai_theo_truong.han}</b><span>hạn gấp</span></div>
       </div>
       <h2>Qua lọc thô (${qua.length})</h2>
@@ -144,7 +281,12 @@
   }
 
   async function tai() {
-    const { ngay, k } = docHash();
+    const { ngay, k, xem } = docHash();
+    const chon = xem === "chon";
+    $("tab-ngay").setAttribute("aria-selected", String(!chon));
+    $("tab-chon").setAttribute("aria-selected", String(chon));
+    $("chon-ngay-hang").hidden = chon;
+    if (chon) return taiDaChon(k);
     const nd = $("noi-dung");
     if (!k) return nd.innerHTML = `<div class="bao loi">Link thiếu mã. Mở lại link trong tin Telegram.</div>`;
     const n = ngay || homNayVN();
@@ -160,6 +302,42 @@
     }
   }
 
+  // Mở "Chương III" của một gói → tải chi tiết một lần.
+  $("noi-dung").addEventListener("toggle", async (e) => {
+    const d = e.target;
+    if (!d.matches?.("details.ct") || !d.open || d.dataset.daTai) return;
+    d.dataset.daTai = "1";
+    const noi = d.querySelector(".noi");
+    try {
+      const res = await fetch(`${CONG}/goi?ma=${encodeURIComponent(d.dataset.ma)}&pb=${encodeURIComponent(d.dataset.pb)}`,
+        { headers: { "x-ma-bi-mat": docHash().k } });
+      if (!res.ok) throw new Error(`Máy chủ trả lỗi ${res.status}.`);
+      noi.innerHTML = veChuong(await res.json());
+    } catch (err) {
+      delete d.dataset.daTai;
+      noi.innerHTML = `<div class="bao loi">Không tải được: ${thoat(err.message)}</div>`;
+    }
+  }, true);
+  $("tab-ngay").onclick = () => datHash({ xem: "" });
+  $("tab-chon").onclick = () => datHash({ xem: "chon" });
+  // Bấm Làm / Bỏ / Máy sai → ghi lên cổng thầu, cập nhật ngay khung của gói đó.
+  $("noi-dung").addEventListener("click", async (e) => {
+    const b = e.target.closest?.(".ph button");
+    if (!b) return;
+    const khung = b.closest(".ph");
+    const ghi_chu = khung.querySelector("input").value;
+    const tt = khung.querySelector(".tt");
+    for (const x of khung.querySelectorAll("button")) x.disabled = true;
+    try {
+      const { phan_hoi } = await goiCong("/phan-hoi", {
+        ma_tbmt: khung.dataset.ma, phien_ban: khung.dataset.pb, loai: b.dataset.loai, ghi_chu,
+      });
+      khung.outerHTML = nutPhanHoi({ ma_tbmt: khung.dataset.ma, phien_ban: khung.dataset.pb, phan_hoi });
+    } catch (err) {
+      tt.innerHTML = `<span class="khong">${thoat(err.message)}</span>`;
+      for (const x of khung.querySelectorAll("button")) x.disabled = false;
+    }
+  });
   $("truoc").onclick = () => doiNgay(congNgay($("chon-ngay").value || homNayVN(), -1));
   $("sau").onclick = () => doiNgay(congNgay($("chon-ngay").value || homNayVN(), 1));
   $("chon-ngay").onchange = (e) => e.target.value && doiNgay(e.target.value);
