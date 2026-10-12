@@ -1,0 +1,170 @@
+<!doctype html>
+<!-- Trang Bảng thầu (spec 02): khung tĩnh, KHÔNG chứa dữ liệu. Dữ liệu lấy từ Edge Function cong-thau
+     bằng mã bí mật nằm sau dấu # của link (phần sau # không gửi lên máy chủ GitHub Pages).
+     Bản gốc ở repo Son/bang-thau/; bản chạy ở repo công khai son-bang-thau (GitHub Pages). -->
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Bảng thầu</title>
+  <style>
+    :root {
+      --nen: #f6f7f9; --the: #fff; --chu: #1b1d21; --phu: #5f6670; --vien: #e2e5ea;
+      --nhan: #0b5cad; --qua: #1e7a3c; --loai: #a1372b; --vang: #8a5a00;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --nen: #131518; --the: #1c1f24; --chu: #e8eaed; --phu: #9aa1ab; --vien: #2d3138;
+        --nhan: #6aa8ec; --qua: #5cc27e; --loai: #f08a7e; --vang: #e0b25c; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--nen); color: var(--chu);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 960px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; margin: 4px 0 12px; }
+    .ngay { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+    .ngay button, .ngay input { font: inherit; padding: 6px 10px; border: 1px solid var(--vien);
+      border-radius: 6px; background: var(--the); color: var(--chu); }
+    .phieu { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;
+      margin-bottom: 16px; }
+    .o { background: var(--the); border: 1px solid var(--vien); border-radius: 8px; padding: 10px 12px; }
+    .o b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+    .o span { color: var(--phu); font-size: 13px; }
+    .bao { padding: 12px; border-radius: 8px; background: var(--the); border: 1px solid var(--vien); }
+    .bao.loi { border-color: var(--loai); color: var(--loai); }
+    h2 { font-size: 16px; margin: 20px 0 8px; }
+    .goi { background: var(--the); border: 1px solid var(--vien); border-radius: 8px; padding: 10px 12px;
+      margin-bottom: 8px; }
+    .goi .ten { font-weight: 600; }
+    .goi .dong { color: var(--phu); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+    .nhan { display: inline-block; font-size: 12px; padding: 0 6px; border-radius: 4px;
+      border: 1px solid currentColor; }
+    .sua { color: var(--vang); }
+    .ghi { color: var(--vang); font-size: 13px; }
+    .lydo { color: var(--loai); font-size: 13px; }
+    details { margin-top: 8px; }
+    summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+    .loc { margin: 8px 0; display: flex; gap: 6px; flex-wrap: wrap; }
+    .loc button { font: inherit; font-size: 13px; padding: 3px 10px; border-radius: 99px;
+      border: 1px solid var(--vien); background: var(--the); color: var(--chu); cursor: pointer; }
+    .loc button[aria-pressed="true"] { border-color: var(--nhan); color: var(--nhan); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Bảng thầu</h1>
+  <div class="ngay">
+    <button id="truoc" aria-label="Ngày trước">‹</button>
+    <input id="chon-ngay" type="date">
+    <button id="sau" aria-label="Ngày sau">›</button>
+  </div>
+  <div id="noi-dung"><div class="bao">Đang tải…</div></div>
+</main>
+<script>
+  // Địa chỉ cổng thầu (không bí mật). Mã bí mật nằm trong link: #ngay=YYYY-MM-DD&k=<mã>.
+  const CONG = "https://jfflejpfkxwlpxqryksb.supabase.co/functions/v1/cong-thau";
+  const TEN_LV = { HH: "Hàng hóa", HON_HOP: "Hỗn hợp", XL: "Xây lắp", TV: "Tư vấn", PTV: "Phi tư vấn" };
+  const TEN_TRUONG = { vung: "Ngoài vùng", linh_vuc: "Lĩnh vực", han: "Hạn gấp" };
+  const $ = (id) => document.getElementById(id);
+  const thoat = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+  function docHash() {
+    const p = new URLSearchParams(location.hash.slice(1));
+    return { ngay: p.get("ngay"), k: p.get("k") };
+  }
+  function homNayVN() {
+    return new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+  }
+  function doiNgay(ngay) {
+    const { k } = docHash();
+    location.hash = new URLSearchParams({ ngay, k: k ?? "" }).toString();
+  }
+  function congNgay(ngay, n) {
+    const d = new Date(ngay + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function tien(gia) {
+    if (!gia?.length) return "không rõ giá";
+    return gia.map((v) => v >= 1e9 ? (v / 1e9).toLocaleString("vi-VN", { maximumFractionDigits: 2 }) + " tỷ"
+      : Math.round(v / 1e6).toLocaleString("vi-VN") + " triệu").join(" · ");
+  }
+  function ngayGio(s) {
+    return s ? `${s.slice(8, 10)}/${s.slice(5, 7)} ${s.slice(11, 16)}` : "";
+  }
+
+  function theGoi(g) {
+    const sua = g.phien_ban !== "00" ? ` <span class="nhan sua">sửa đổi ${thoat(g.phien_ban)}</span>` : "";
+    return `<div class="goi">
+      <div class="ten">${thoat(g.ten)}${sua}</div>
+      <div class="dong"><span>${thoat(g.ma_tbmt)}-${thoat(g.phien_ban)}</span><span>${thoat(g.ben_moi)}</span></div>
+      <div class="dong"><span>${thoat(g.dia_diem.join(", "))}</span>
+        <span>${thoat(g.linh_vuc.map((l) => TEN_LV[l] ?? l).join(", "))}</span>
+        <span>${tien(g.gia)}</span><span>đóng ${ngayGio(g.han_dong)}</span></div>
+      ${g.ghi_chu?.length ? `<div class="ghi">${thoat(g.ghi_chu.join(" · "))}</div>` : ""}
+      ${g.ly_do?.length ? `<div class="lydo">${thoat(g.ly_do.map((l) => l.chu).join(" · "))}</div>` : ""}
+    </div>`;
+  }
+
+  function ve(du) {
+    const nd = $("noi-dung");
+    const p = du.phien;
+    if (!p) return nd.innerHTML = `<div class="bao">Ngày này chưa quét.</div>`;
+    if (p.trang_thai === "dang_chay") return nd.innerHTML = `<div class="bao">Phiên quét đang chạy…</div>`;
+    if (p.trang_thai === "loi") {
+      return nd.innerHTML = `<div class="bao loi">Phiên quét lỗi: ${thoat(p.ly_do_loi)}</div>`;
+    }
+    const f = p.phieu;
+    const qua = du.goi.filter((g) => g.qua);
+    const loai = du.goi.filter((g) => !g.qua);
+    nd.innerHTML = `
+      <div class="phieu">
+        <div class="o"><b>${f.tong}</b><span>gói (${f.moi} mới, ${f.sua_doi} sửa đổi)</span></div>
+        <div class="o"><b>${f.qua_loc_tho}</b><span>qua lọc thô</span></div>
+        <div class="o"><b>${f.loai_theo_truong.vung}</b><span>ngoài vùng</span></div>
+        <div class="o"><b>${f.loai_theo_truong.linh_vuc}</b><span>sai lĩnh vực</span></div>
+        <div class="o"><b>${f.loai_theo_truong.han}</b><span>hạn gấp</span></div>
+      </div>
+      <h2>Qua lọc thô (${qua.length})</h2>
+      ${qua.map(theGoi).join("") || `<div class="bao">Không có gói nào.</div>`}
+      <details><summary>Bị loại (${loai.length})</summary>
+        <div class="loc" id="loc-loai">${Object.entries(TEN_TRUONG).map(([k, t]) =>
+          `<button data-truong="${k}" aria-pressed="false">${t}</button>`).join("")}</div>
+        <div id="ds-loai">${loai.map(theGoi).join("")}</div>
+      </details>`;
+    // Lọc danh sách bị loại theo trường (bấm lại để bỏ lọc).
+    $("loc-loai").addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      const bat = b.getAttribute("aria-pressed") !== "true";
+      for (const x of $("loc-loai").children) x.setAttribute("aria-pressed", "false");
+      b.setAttribute("aria-pressed", String(bat));
+      const ds = bat ? loai.filter((g) => g.ly_do.some((l) => l.truong === b.dataset.truong)) : loai;
+      $("ds-loai").innerHTML = ds.map(theGoi).join("");
+    });
+  }
+
+  async function tai() {
+    const { ngay, k } = docHash();
+    const nd = $("noi-dung");
+    if (!k) return nd.innerHTML = `<div class="bao loi">Link thiếu mã. Mở lại link trong tin Telegram.</div>`;
+    const n = ngay || homNayVN();
+    $("chon-ngay").value = n;
+    nd.innerHTML = `<div class="bao">Đang tải…</div>`;
+    try {
+      const res = await fetch(`${CONG}/bang?ngay=${n}`, { headers: { "x-ma-bi-mat": k } });
+      if (res.status === 401) throw new Error("Mã trong link không đúng.");
+      if (!res.ok) throw new Error(`Máy chủ trả lỗi ${res.status}.`);
+      ve(await res.json());
+    } catch (e) {
+      nd.innerHTML = `<div class="bao loi">Không tải được: ${thoat(e.message)}</div>`;
+    }
+  }
+
+  $("truoc").onclick = () => doiNgay(congNgay($("chon-ngay").value || homNayVN(), -1));
+  $("sau").onclick = () => doiNgay(congNgay($("chon-ngay").value || homNayVN(), 1));
+  $("chon-ngay").onchange = (e) => e.target.value && doiNgay(e.target.value);
+  addEventListener("hashchange", tai);
+  tai();
+</script>
+</body>
+</html>
