@@ -65,6 +65,10 @@
     .muc .dt-them { display: none; }
     .cuoi { margin-top: 28px; color: var(--phu); font-size: 13px; border-top: 1px solid var(--vien); padding: 10px 4px 0; }
     .sua { font-size: 12px; color: var(--vang); border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; }
+    .co-do { color: var(--do); font-weight: 600; font-size: 13px; margin-top: 3px; }
+    .sua-doi { margin-top: 8px; font-size: 14px; } .sua-doi.co-do { font-size: 14.5px; }
+    details.ban-cu { margin-top: 10px; background: var(--nen); border-radius: 8px; padding: 8px 12px; }
+    details.ban-cu summary { cursor: pointer; color: var(--nhan); }
 
     /* Chi tiết gói */
     .chip { display: inline-block; border-radius: 6px; padding: 1px 9px; font-size: 13px; font-weight: 600; }
@@ -225,6 +229,7 @@
     return `<div class="muc ${k} ${chinh ? "" : "nho"} ${chon ? "chon" : ""}" tabindex="0" role="button" data-goi="${thoat(khoa(g))}">
       <div class="ten">${thoat(g.ten)}${sua}</div>
       <div class="ly">${thoat(g.mot_dong ?? "Máy chưa đọc xong gói này")}</div>
+      ${g.sua_doi?.co_do ? `<div class="co-do">🚩 ${thoat(g.sua_doi.cau)}</div>` : ""}
       ${chinh ? `<div class="dt-them"><div class="meta">${han(g)}</div>${nutPhanHoi(g, { gon: true })}</div>` : ""}
     </div>`;
   }
@@ -235,7 +240,8 @@
     if (!p) { ds.innerHTML = `<div class="tomtat">${thoat(du.tom_tat ?? "Ngày này chưa quét.")}</div>`; return []; }
     const bao = p.trang_thai === "dang_chay" ? `<div class="bao">Lần quét mới nhất đang chạy…</div>`
       : p.trang_thai === "loi" ? `<div class="bao loi">Lần quét mới nhất bị lỗi: ${thoat(p.ly_do_loi)}. Anh bấm quét lại.</div>` : "";
-    const qua = du.goi.filter((g) => g.qua);
+    // Bản cũ đã có bản sửa đổi trong cùng ngày: cổng đánh dấu, trang không hiện (bản mới có khung "Bản trước").
+    const qua = du.goi.filter((g) => g.qua && !g.da_co_ban_moi);
     const nhom = Object.fromEntries(THU_TU.map((k) => [k, qua.filter((g) => (g.nhom_hien_thi ?? "can_xem") === k)]));
     // Cần anh xem: hạn đóng gần nhất lên đầu.
     nhom.can_xem.sort((a, b) => a.han_dong.localeCompare(b.han_dong));
@@ -312,9 +318,12 @@
       <div class="ten-goi">${thoat(g.ten)}</div>
       <div class="meta">${thoat(g.ben_moi)} · ${thoat(noi(g) || "không ghi nơi")} · ${gia(g)} · ${han(g)}</div>
       <div class="mot-dong ${k}">${thoat(du.mot_dong ?? "Máy chưa đọc xong gói này")}</div>
+      ${du.sua_doi ? `<div class="sua-doi ${du.sua_doi.co_do ? "co-do" : ""}">${du.sua_doi.co_do ? "🚩 " : ""}${thoat(du.sua_doi.cau)}</div>` : ""}
       ${nutPhanHoi({ ...g, phan_hoi: du.phan_hoi })}
       ${bangKiem(du, { chiLoi: dt })}
       ${dt && du.bang_kiem ? `<div class="ghi">Xem nguyên văn hồ sơ và ảnh chụp: mở trên máy tính.</div>` : ""}
+      ${du.ban_cu ? `<details class="ban-cu"><summary>Bản trước (lần ${thoat(du.ban_cu.phien_ban)}): ${thoat(TEN_NHOM[du.ban_cu.nhom_hien_thi] ?? "")}</summary>
+        <div class="meta">${thoat(du.ban_cu.mot_dong ?? "")}</div>${bangKiem({ bang_kiem: du.ban_cu.bang_kiem }, { chiLoi: dt })}</details>` : ""}
       <div class="ghi"><a href="${thoat(linkHoSo(g))}" target="_blank" rel="noopener">Mở hồ sơ trên muasamcong</a>${tai}</div>`;
     $("ct").classList.remove("trong");
     $("ct").scrollTop = 0;
@@ -430,7 +439,9 @@
       td.closest("tr").querySelectorAll("td.o").forEach((x) => x.classList.remove("mo"));
       if (oDangMo) { dong.hidden = true; return; }
       const du = chiTiet[dangMo];
-      const o = du?.bang_kiem?.dong.find((d) => d.hang === td.dataset.hang)?.o[+td.dataset.i];
+      // Ô trong khung "Bản trước" (gói sửa đổi) tra bảng kiểm của bản trước.
+      const bk = td.closest("details.ban-cu") ? du?.ban_cu?.bang_kiem : du?.bang_kiem;
+      const o = bk?.dong.find((d) => d.hang === td.dataset.hang)?.o[+td.dataset.i];
       if (!o) return;
       td.classList.add("mo");
       dong.hidden = false;
