@@ -77,6 +77,10 @@
     .chip.khong_dat { background: var(--do-nen); color: var(--do); }
     .chip.khong_doi, .chip.ngoai { background: var(--xam-nen); color: var(--phu); }
     .chip.ai { background: var(--xam-nen); color: var(--chu); }
+    .nut-ai { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .nut-ai button { border: 1px solid var(--vien); background: var(--the); border-radius: 7px; padding: 4px 14px; }
+    .nut-ai button:disabled { opacity: .55; cursor: default; }
+    .nut-ai .tt { color: var(--phu); font-size: 13px; }
     .goi-y-ai { font-size: 13px; color: var(--phu); margin-top: 3px; }
     .khoi-ai { margin-top: 10px; } .toan-van { white-space: pre-wrap; font-size: 14px; margin-top: 6px; }
     .phai .ten-goi { font-size: 20px; font-weight: 600; margin-top: 6px; }
@@ -316,10 +320,47 @@
   // "Xem đầy đủ" = toàn văn AI + ghi chú máy soát số.
   function khoiAi(a) {
     if (!a) return "";
-    const dau = a.nang ? `<span class="chip ai">AI đánh giá</span>` : `<div class="goi-y-ai">Gợi ý AI: ${thoat(a.mot_dong)}</div>`;
+    // Gói đã nâng mà lần AI xét lại nói khác → giữ nhãn (AI không hạ gói) + hiện ý mới để anh biết.
+    const xetLai = a.nang && a.ket_luan !== "dat" && a.ket_luan !== "dat_lien_danh";
+    const dau = a.nang
+      ? `<span class="chip ai">AI đánh giá</span>${xetLai ? `<div class="goi-y-ai">AI xét lại: ${thoat(a.mot_dong)}</div>` : ""}`
+      : `<div class="goi-y-ai">Gợi ý AI: ${thoat(a.mot_dong)}</div>`;
     const soat = a.soat?.length ? `<div class="meta">Máy soát số: ${a.soat.map(thoat).join(" · ")}</div>` : "";
     return `<div class="khoi-ai">${dau}<details class="ban-cu"><summary>Xem đầy đủ AI đánh giá</summary>${soat}
       <div class="toan-van">${thoat(a.toan_van ?? "")}</div></details></div>`;
+  }
+
+  // Nút "Nhờ AI xem gói này" (ticket 21): đang đọc → khóa; hết lượt → mờ + câu lời thường của cổng thầu.
+  function nutAi(du) {
+    const n = du.nut_ai;
+    if (!n) return "";
+    const khoa = `${du.goi.ma_tbmt}-${du.goi.phien_ban}`;
+    return `<div class="nut-ai" data-goi="${thoat(khoa)}"><button ${n.dang_doc || !n.con_luot ? "disabled" : ""}>${n.dang_doc ? "AI đang đọc…" : "Nhờ AI xem gói này"}</button><span class="tt">${thoat(n.cau ?? "")}</span></div>`;
+  }
+
+  // AI đang đọc gói đang mở → 30 giây tải lại chi tiết một lần, AI ghi xong thì vẽ bản mới (tối đa ~15 phút).
+  const dangCho = new Set(); // gói đang có hẹn giờ chờ AI — không đặt hẹn thứ hai
+  function choAi(kh, lan = 0) {
+    if (lan === 0 && dangCho.has(kh)) return;
+    dangCho.add(kh);
+    setTimeout(async () => {
+      if (dangMo !== kh) return dangCho.delete(kh);
+      const [, ma, pb] = kh.match(/^(.+)-(\d{2})$/);
+      try {
+        const du = await goiCong(`/goi?ma=${encodeURIComponent(ma)}&pb=${encodeURIComponent(pb)}`);
+        if (dangMo !== kh) return dangCho.delete(kh);
+        chiTiet[kh] = du;
+        if (du.nut_ai?.dang_doc && lan < 32) return choAi(kh, lan + 1);
+        // AI ghi xong (hoặc cổng thầu thôi chờ sau 15 phút) → vẽ lại danh sách (nhóm của gói có thể đã đổi
+        // vì AI nâng) + chi tiết từ bản vừa tải.
+        dangCho.delete(kh);
+        daTai = null;
+        tai();
+      } catch {
+        if (lan < 32) choAi(kh, lan + 1);
+        else dangCho.delete(kh);
+      }
+    }, 30_000);
   }
 
   function veChiTiet(du) {
@@ -335,6 +376,7 @@
       ${du.sua_doi ? `<div class="sua-doi ${du.sua_doi.co_do ? "co-do" : ""}">${du.sua_doi.co_do ? "🚩 " : ""}${thoat(du.sua_doi.cau)}</div>` : ""}
       ${nutPhanHoi({ ...g, phan_hoi: du.phan_hoi })}
       ${khoiAi(du.danh_gia_ai)}
+      ${nutAi(du)}
       ${bangKiem(du, { chiLoi: dt })}
       ${dt && du.bang_kiem ? `<div class="ghi">Xem nguyên văn hồ sơ và ảnh chụp: mở trên máy tính.</div>` : ""}
       ${du.ban_cu ? `<details class="ban-cu"><summary>Bản trước (lần ${thoat(du.ban_cu.phien_ban)}): ${thoat(TEN_NHOM[du.ban_cu.nhom_hien_thi] ?? "")}</summary>
@@ -363,6 +405,7 @@
       if (dangMo !== kh) return; // trong lúc tải, anh đã bấm sang gói khác
     }
     veChiTiet(chiTiet[kh]);
+    if (chiTiet[kh].nut_ai?.dang_doc) choAi(kh);
   }
 
   // ── Tải theo hash
@@ -440,6 +483,25 @@
       } catch (err) {
         tt.className = "tt loi"; tt.textContent = err.message;
         for (const x of khung.querySelectorAll("button")) x.disabled = false;
+      }
+      return;
+    }
+    const nai = e.target.closest(".nut-ai button");
+    if (nai) {
+      const khung = nai.closest(".nut-ai");
+      const kh = khung.dataset.goi;
+      const [, ma, pb] = kh.match(/^(.+)-(\d{2})$/);
+      const tt = khung.querySelector(".tt");
+      nai.disabled = true;
+      try {
+        const r = await goiCong("/goi/nho-ai", { ma, pb });
+        nai.textContent = "AI đang đọc…";
+        tt.textContent = r.cau;
+        if (chiTiet[kh]) chiTiet[kh].nut_ai = { ...chiTiet[kh].nut_ai, dang_doc: true, cau: r.cau };
+        choAi(kh);
+      } catch (err) {
+        tt.textContent = err.message;
+        nai.disabled = false;
       }
       return;
     }
