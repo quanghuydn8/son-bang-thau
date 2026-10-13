@@ -76,6 +76,9 @@
     .chip.can_xem { background: var(--vang-nen); color: var(--vang); }
     .chip.khong_dat { background: var(--do-nen); color: var(--do); }
     .chip.khong_doi, .chip.ngoai { background: var(--xam-nen); color: var(--phu); }
+    .chip.ai { background: var(--xam-nen); color: var(--chu); }
+    .goi-y-ai { font-size: 13px; color: var(--phu); margin-top: 3px; }
+    .khoi-ai { margin-top: 10px; } .toan-van { white-space: pre-wrap; font-size: 14px; margin-top: 6px; }
     .phai .ten-goi { font-size: 20px; font-weight: 600; margin-top: 6px; }
     .meta { color: var(--phu); font-size: 13.5px; margin-top: 2px; }
     .gap { color: var(--do); font-weight: 600; }
@@ -230,6 +233,7 @@
       <div class="ten">${thoat(g.ten)}${sua}</div>
       <div class="ly">${thoat(g.mot_dong ?? "Máy chưa đọc xong gói này")}</div>
       ${g.sua_doi?.co_do ? `<div class="co-do">🚩 ${thoat(g.sua_doi.cau)}</div>` : ""}
+      ${g.danh_gia_ai && !g.danh_gia_ai.nang ? `<div class="goi-y-ai">Gợi ý AI: ${thoat(g.danh_gia_ai.mot_dong)}</div>` : ""}
       ${chinh ? `<div class="dt-them"><div class="meta">${han(g)}</div>${nutPhanHoi(g, { gon: true })}</div>` : ""}
     </div>`;
   }
@@ -308,6 +312,16 @@
     return `<div class="giai">${h}</div>`;
   }
 
+  // AI đánh giá hợp đồng tương tự (ticket 14): nâng → một dòng đã là "AI đánh giá: …"; không nâng → gợi ý.
+  // "Xem đầy đủ" = toàn văn AI + ghi chú máy soát số.
+  function khoiAi(a) {
+    if (!a) return "";
+    const dau = a.nang ? `<span class="chip ai">AI đánh giá</span>` : `<div class="goi-y-ai">Gợi ý AI: ${thoat(a.mot_dong)}</div>`;
+    const soat = a.soat?.length ? `<div class="meta">Máy soát số: ${a.soat.map(thoat).join(" · ")}</div>` : "";
+    return `<div class="khoi-ai">${dau}<details class="ban-cu"><summary>Xem đầy đủ AI đánh giá</summary>${soat}
+      <div class="toan-van">${thoat(a.toan_van ?? "")}</div></details></div>`;
+  }
+
   function veChiTiet(du) {
     const g = du.goi;
     const k = du.nhom_hien_thi ?? "can_xem";
@@ -320,6 +334,7 @@
       <div class="mot-dong ${k}">${thoat(du.mot_dong ?? "Máy chưa đọc xong gói này")}</div>
       ${du.sua_doi ? `<div class="sua-doi ${du.sua_doi.co_do ? "co-do" : ""}">${du.sua_doi.co_do ? "🚩 " : ""}${thoat(du.sua_doi.cau)}</div>` : ""}
       ${nutPhanHoi({ ...g, phan_hoi: du.phan_hoi })}
+      ${khoiAi(du.danh_gia_ai)}
       ${bangKiem(du, { chiLoi: dt })}
       ${dt && du.bang_kiem ? `<div class="ghi">Xem nguyên văn hồ sơ và ảnh chụp: mở trên máy tính.</div>` : ""}
       ${du.ban_cu ? `<details class="ban-cu"><summary>Bản trước (lần ${thoat(du.ban_cu.phien_ban)}): ${thoat(TEN_NHOM[du.ban_cu.nhom_hien_thi] ?? "")}</summary>
