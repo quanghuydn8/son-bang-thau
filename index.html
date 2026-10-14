@@ -161,7 +161,7 @@
       <input id="chon-ngay" type="date" aria-label="Chọn ngày">
       <button id="sau" aria-label="Ngày sau">›</button>
     </div>
-    <input id="tim" class="tim" type="search" placeholder="Tìm mã gói (IB…), tên gói, tỉnh…" aria-label="Tìm gói">
+    <input id="tim" class="tim" type="search" placeholder="Tìm mã gói (IB…), tên, tỉnh — trong 30 ngày" aria-label="Tìm gói">
     <div id="ds"><div class="bao">Đang tải…</div></div>
   </div>
   <div class="phai trong" id="ct"></div>
@@ -236,14 +236,15 @@
   });
 
   // ── Cột trái
-  function mucGoi(g, chon) {
+  // ngayQuet: chỉ có khi thẻ nằm trong kết quả tìm mọi ngày — ghi "quét dd/mm", bấm thì chuyển sang ngày đó.
+  function mucGoi(g, chon, ngayQuet) {
     const k = g.nhom_hien_thi ?? "can_xem";
     const chinh = k === "nen_lam" || k === "can_xem";
     const sua = g.phien_ban !== "00" ? ` <span class="sua">sửa đổi ${thoat(g.phien_ban)}</span>` : "";
     const tim = boDau([g.ma_tbmt, g.ten, noi(g), g.ben_moi].join(" "));
-    return `<div class="muc ${k} ${chinh ? "" : "nho"} ${chon ? "chon" : ""}" tabindex="0" role="button" data-goi="${thoat(khoa(g))}" data-tim="${thoat(tim)}">
+    return `<div class="muc ${k} ${chinh ? "" : "nho"} ${chon ? "chon" : ""}" tabindex="0" role="button" data-goi="${thoat(khoa(g))}" data-tim="${thoat(tim)}"${ngayQuet ? ` data-ngay="${thoat(ngayQuet)}"` : ""}>
       <div class="ten">${thoat(g.ten)}${sua}</div>
-      <div class="ma">${thoat(g.ma_tbmt)}</div>
+      <div class="ma">${thoat(g.ma_tbmt)}${ngayQuet ? ` · quét ${thoat(ddmm(ngayQuet))}` : ""}</div>
       <div class="ly">${thoat(g.mot_dong ?? "Máy chưa đọc xong gói này")}</div>
       ${g.sua_doi?.co_do ? `<div class="co-do">🚩 ${thoat(g.sua_doi.cau)}</div>` : ""}
       ${g.danh_gia_ai && !g.danh_gia_ai.nang ? `<div class="goi-y-ai">Gợi ý AI: ${thoat(g.danh_gia_ai.mot_dong)}</div>` : ""}
@@ -251,14 +252,16 @@
     </div>`;
   }
 
+  // Bản cũ đã có bản sửa đổi trong cùng ngày: cổng đánh dấu, trang không hiện (bản mới có khung "Bản trước").
+  const goiHien = (du) => (du.goi ?? []).filter((g) => g.qua && !g.da_co_ban_moi);
+
   function veDanhSach(du) {
     const ds = $("ds");
     const p = du.phien;
     if (!p) { ds.innerHTML = `<div class="tomtat">${thoat(du.tom_tat ?? "Ngày này chưa quét.")}</div>`; return []; }
     const bao = p.trang_thai === "dang_chay" ? `<div class="bao">Lần quét mới nhất đang chạy…</div>`
       : p.trang_thai === "loi" ? `<div class="bao loi">Lần quét mới nhất bị lỗi: ${thoat(p.ly_do_loi)}. Anh bấm quét lại.</div>` : "";
-    // Bản cũ đã có bản sửa đổi trong cùng ngày: cổng đánh dấu, trang không hiện (bản mới có khung "Bản trước").
-    const qua = du.goi.filter((g) => g.qua && !g.da_co_ban_moi);
+    const qua = goiHien(du);
     const nhom = Object.fromEntries(THU_TU.map((k) => [k, qua.filter((g) => (g.nhom_hien_thi ?? "can_xem") === k)]));
     // Cần anh xem: hạn đóng gần nhất lên đầu.
     nhom.can_xem.sort((a, b) => a.han_dong.localeCompare(b.han_dong));
@@ -279,8 +282,8 @@
     return THU_TU.flatMap((k) => nhom[k]);
   }
 
-  /** Ô tìm: lọc thẻ gói đang vẽ ở cột trái (mã, tên, tỉnh, bên mời). Nhóm thu gọn có gói khớp thì mở ra;
-   *  xóa chữ tìm thì nhóm đó đóng lại như cũ. Gọi lại sau mỗi lần vẽ danh sách (đổi ngày giữ chữ tìm). */
+  /** Lọc thẻ gói đang vẽ ở cột trái (mã, tên, tỉnh, bên mời) — dùng cho tab Đã chọn làm. Nhóm thu gọn có gói
+   *  khớp thì mở ra; xóa chữ tìm thì nhóm đó đóng lại như cũ. */
   function locTim() {
     const q = boDau($("tim").value.trim());
     const ds = $("ds");
@@ -299,9 +302,71 @@
       }
     }
     if (q && !thay && ds.querySelector(".muc")) {
-      ds.insertAdjacentHTML("beforeend", `<div class="bao khong-thay">Không thấy gói nào khớp "${thoat($("tim").value.trim())}" trong danh sách này. Gói quét ngày khác thì đổi ngày rồi tìm lại.</div>`);
+      ds.insertAdjacentHTML("beforeend", `<div class="bao khong-thay">Không thấy gói nào khớp "${thoat($("tim").value.trim())}" trong danh sách này.</div>`);
     }
   }
+
+  // ── Tìm mọi ngày (tab Theo ngày): trang không đọc DB, chỉ hỏi được cổng thầu "/bang?ngay=" từng ngày →
+  // tải 30 ngày gần nhất (6 ngày một lúc), giữ 2 phút để gõ tiếp không tải lại, lọc ở trình duyệt.
+  const SO_NGAY_TIM = 30;
+  const boNho = new Map(); // ngày → { luc, hua }
+  function taiNgay(n) {
+    const c = boNho.get(n);
+    if (c && Date.now() - c.luc < 120e3) return c.hua;
+    const hua = goiCong(`/bang?ngay=${n}`);
+    boNho.set(n, { luc: Date.now(), hua });
+    hua.catch(() => boNho.delete(n));
+    return hua;
+  }
+  async function chayGioiHan(ds, soLuong, f) {
+    const kq = [];
+    let i = 0;
+    await Promise.all(Array.from({ length: soLuong }, async () => {
+      while (i < ds.length) { const j = i++; kq[j] = await f(ds[j]).catch(() => null); }
+    }));
+    return kq;
+  }
+  let lanTim = 0; // gõ liên tục: chỉ kết quả của lần tìm mới nhất được vẽ
+  async function timMoiNgay() {
+    const chu = $("tim").value.trim();
+    const q = boDau(chu);
+    const lan = ++lanTim;
+    daTai = "tim";
+    const ds = $("ds");
+    ds.innerHTML = `<div class="bao">Đang tìm trong ${SO_NGAY_TIM} ngày gần nhất…</div>`;
+    const ngays = Array.from({ length: SO_NGAY_TIM }, (_, i) => congNgay(homNayVN(), -i));
+    const kq = await chayGioiHan(ngays, 6, taiNgay);
+    if (lan !== lanTim) return;
+    const thay = [];
+    const da = new Set();
+    let hong = 0;
+    ngays.forEach((n, i) => {
+      if (!kq[i]) { hong++; return; }
+      for (const g of goiHien(kq[i])) {
+        // Một gói quét nhiều ngày → giữ lần quét mới nhất (ngày duyệt từ hôm nay lùi về).
+        if (da.has(khoa(g)) || !boDau([g.ma_tbmt, g.ten, noi(g), g.ben_moi].join(" ")).includes(q)) continue;
+        da.add(khoa(g));
+        thay.push({ g, n });
+      }
+    });
+    dsGoi = thay.map((x) => x.g);
+    const dt = laDienThoai();
+    const chon = docHash().goi;
+    ds.innerHTML = `<div class="tomtat">Tìm "${thoat(chu)}" trong ${SO_NGAY_TIM} ngày gần nhất: ${thay.length} gói</div>` +
+      (thay.map(({ g, n }) => mucGoi(g, !dt && khoa(g) === chon, n)).join("") ||
+        `<div class="bao khong-thay">Không thấy gói nào khớp "${thoat(chu)}" trong ${SO_NGAY_TIM} ngày gần nhất.</div>`) +
+      (hong ? `<div class="bao loi">${hong} ngày không tải được — kết quả có thể thiếu. Anh thử tìm lại sau.</div>` : "");
+  }
+  let henTim;
+  function capNhatTim() {
+    if (docHash().xem === "chon") return locTim();
+    if ($("tim").value.trim()) return timMoiNgay();
+    lanTim++;
+    daTai = null;
+    tai();
+  }
+  // Tự đổi ngày = muốn xem ngày đó → bỏ chữ tìm.
+  function boTim() { $("tim").value = ""; lanTim++; }
 
   // ── Cột phải: chi tiết một gói
   function nutPhanHoi(g, { gon = false } = {}) {
@@ -387,6 +452,7 @@
         // AI ghi xong (hoặc cổng thầu thôi chờ sau 15 phút) → vẽ lại danh sách (nhóm của gói có thể đã đổi
         // vì AI nâng) + chi tiết từ bản vừa tải.
         dangCho.delete(kh);
+        boNho.clear();
         daTai = null;
         tai();
       } catch {
@@ -454,6 +520,12 @@
     if (!k) { ds.innerHTML = `<div class="bao loi">Link thiếu mã. Mở lại link trong tin Telegram.</div>`; return; }
     const n = ngay || homNayVN();
     $("chon-ngay").value = n;
+    // Đang tìm mọi ngày: cột trái là kết quả tìm, giữ nguyên khi mở gói (kể cả gói ở ngày khác).
+    if (!chon && $("tim").value.trim()) {
+      if (daTai !== "tim") await timMoiNgay();
+      await moGoi(goi ?? null);
+      return;
+    }
     const khoaDs = `${chon ? "chon" : n}`;
     if (daTai !== khoaDs) {
       const lan = ++lanTai;
@@ -541,7 +613,7 @@
     }
     if (e.target.closest("#dong-ct")) { datHash({ goi: "" }); return; }
     const m = e.target.closest(".muc");
-    if (m && !e.target.closest("input")) { datHash({ goi: m.dataset.goi }); return; }
+    if (m && !e.target.closest("input")) { datHash({ goi: m.dataset.goi, ...(m.dataset.ngay ? { ngay: m.dataset.ngay } : {}) }); return; }
     // Bấm một ô bảng kiểm → mở / đóng dòng giải thích ngay dưới.
     const td = e.target.closest("td.o");
     if (td) {
@@ -565,10 +637,10 @@
   });
   $("tab-ngay").onclick = () => datHash({ xem: "", goi: "" });
   $("tab-chon").onclick = () => datHash({ xem: "chon", goi: "" });
-  $("truoc").onclick = () => datHash({ ngay: congNgay($("chon-ngay").value || homNayVN(), -1), goi: "" });
-  $("sau").onclick = () => datHash({ ngay: congNgay($("chon-ngay").value || homNayVN(), 1), goi: "" });
-  $("chon-ngay").onchange = (e) => e.target.value && datHash({ ngay: e.target.value, goi: "" });
-  $("tim").oninput = locTim;
+  $("truoc").onclick = () => boTim() || datHash({ ngay: congNgay($("chon-ngay").value || homNayVN(), -1), goi: "" });
+  $("sau").onclick = () => boTim() || datHash({ ngay: congNgay($("chon-ngay").value || homNayVN(), 1), goi: "" });
+  $("chon-ngay").onchange = (e) => e.target.value && (boTim() || datHash({ ngay: e.target.value, goi: "" }));
+  $("tim").oninput = () => { clearTimeout(henTim); henTim = setTimeout(capNhatTim, 300); };
   addEventListener("hashchange", tai);
   // Đổi cỡ màn hình qua mốc 720px → vẽ lại (nhóm thu gọn và bảng kiểm khác nhau giữa hai bản).
   matchMedia("(max-width: 720px)").addEventListener("change", () => { daTai = null; tai(); });
