@@ -63,6 +63,10 @@
     .muc .ly { font-size: 13px; color: var(--phu); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2;
       -webkit-box-orient: vertical; overflow: hidden; }
     .muc .dt-them { display: none; }
+    .muc .ma { font-size: 12px; color: var(--phu); margin-top: 1px; font-variant-numeric: tabular-nums; }
+    .tim { display: block; width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 6px 10px;
+      border: 1px solid var(--vien); border-radius: 8px; background: var(--the); }
+    .muc[hidden], .nhom-ds[hidden], details.nhom[hidden] { display: none; }
     .cuoi { margin-top: 28px; color: var(--phu); font-size: 13px; border-top: 1px solid var(--vien); padding: 10px 4px 0; }
     .sua { font-size: 12px; color: var(--vang); border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; }
     .co-do { color: var(--do); font-weight: 600; font-size: 13px; margin-top: 3px; }
@@ -157,6 +161,7 @@
       <input id="chon-ngay" type="date" aria-label="Chọn ngày">
       <button id="sau" aria-label="Ngày sau">›</button>
     </div>
+    <input id="tim" class="tim" type="search" placeholder="Tìm mã gói (IB…), tên gói, tỉnh…" aria-label="Tìm gói">
     <div id="ds"><div class="bao">Đang tải…</div></div>
   </div>
   <div class="phai trong" id="ct"></div>
@@ -173,6 +178,8 @@
   const thoat = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const laDienThoai = () => matchMedia("(max-width: 720px)").matches;
   const khoa = (g) => `${g.ma_tbmt}-${g.phien_ban}`;
+  // Tìm không cần gõ dấu: "son la" khớp "Sơn La".
+  const boDau = (s) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase();
 
   // ── Trạng thái trang
   let dsGoi = [];          // gói đang hiện ở cột trái (theo ngày hoặc đã chọn làm)
@@ -233,8 +240,10 @@
     const k = g.nhom_hien_thi ?? "can_xem";
     const chinh = k === "nen_lam" || k === "can_xem";
     const sua = g.phien_ban !== "00" ? ` <span class="sua">sửa đổi ${thoat(g.phien_ban)}</span>` : "";
-    return `<div class="muc ${k} ${chinh ? "" : "nho"} ${chon ? "chon" : ""}" tabindex="0" role="button" data-goi="${thoat(khoa(g))}">
+    const tim = boDau([g.ma_tbmt, g.ten, noi(g), g.ben_moi].join(" "));
+    return `<div class="muc ${k} ${chinh ? "" : "nho"} ${chon ? "chon" : ""}" tabindex="0" role="button" data-goi="${thoat(khoa(g))}" data-tim="${thoat(tim)}">
       <div class="ten">${thoat(g.ten)}${sua}</div>
+      <div class="ma">${thoat(g.ma_tbmt)}</div>
       <div class="ly">${thoat(g.mot_dong ?? "Máy chưa đọc xong gói này")}</div>
       ${g.sua_doi?.co_do ? `<div class="co-do">🚩 ${thoat(g.sua_doi.cau)}</div>` : ""}
       ${g.danh_gia_ai && !g.danh_gia_ai.nang ? `<div class="goi-y-ai">Gợi ý AI: ${thoat(g.danh_gia_ai.mot_dong)}</div>` : ""}
@@ -263,11 +272,35 @@
       // Máy tính: thu gọn Không đạt + Không phải hàng của mình. Điện thoại: chỉ mở Nên làm + Cần anh xem.
       const thuGon = dt ? !(k === "nen_lam" || k === "can_xem") : (k === "khong_dat" || k === "ngoai");
       const tieuDe = `<h3>${TEN_NHOM[k]} (${d.length})</h3>`;
-      h += thuGon ? `<details class="nhom"><summary>${tieuDe}</summary>${muc}</details>` : tieuDe + muc;
+      h += thuGon ? `<details class="nhom"><summary>${tieuDe}</summary>${muc}</details>` : `<div class="nhom-ds">${tieuDe}${muc}</div>`;
     }
     if (du.may_da_bo) h += `<div class="cuoi">${thoat(du.may_da_bo)}</div>`;
     ds.innerHTML = h;
     return THU_TU.flatMap((k) => nhom[k]);
+  }
+
+  /** Ô tìm: lọc thẻ gói đang vẽ ở cột trái (mã, tên, tỉnh, bên mời). Nhóm thu gọn có gói khớp thì mở ra;
+   *  xóa chữ tìm thì nhóm đó đóng lại như cũ. Gọi lại sau mỗi lần vẽ danh sách (đổi ngày giữ chữ tìm). */
+  function locTim() {
+    const q = boDau($("tim").value.trim());
+    const ds = $("ds");
+    ds.querySelector(".khong-thay")?.remove();
+    let thay = 0;
+    for (const m of ds.querySelectorAll(".muc")) {
+      m.hidden = !!q && !m.dataset.tim.includes(q);
+      if (!m.hidden) thay++;
+    }
+    for (const n of ds.querySelectorAll(".nhom-ds, details.nhom")) {
+      const co = [...n.querySelectorAll(".muc")].some((m) => !m.hidden);
+      n.hidden = !!q && !co;
+      if (n.tagName === "DETAILS") {
+        if (q && co && !n.open) { n.open = true; n.dataset.moTim = "1"; }
+        if (!q && n.dataset.moTim) { n.open = false; delete n.dataset.moTim; }
+      }
+    }
+    if (q && !thay && ds.querySelector(".muc")) {
+      ds.insertAdjacentHTML("beforeend", `<div class="bao khong-thay">Không thấy gói nào khớp "${thoat($("tim").value.trim())}" trong danh sách này. Gói quét ngày khác thì đổi ngày rồi tìm lại.</div>`);
+    }
   }
 
   // ── Cột phải: chi tiết một gói
@@ -371,7 +404,7 @@
     $("ct").innerHTML = `<button class="dong-x" id="dong-ct">Đóng ✕</button>
       <span class="chip ${k}">${TEN_NHOM[k]}</span>${g.phien_ban !== "00" ? ` <span class="sua">sửa đổi ${thoat(g.phien_ban)}</span>` : ""}
       <div class="ten-goi">${thoat(g.ten)}</div>
-      <div class="meta">${thoat(g.ben_moi)} · ${thoat(noi(g) || "không ghi nơi")} · ${gia(g)} · ${han(g)}</div>
+      <div class="meta">${[g.ma_tbmt, g.ben_moi].filter(Boolean).map(thoat).join(" · ")} · ${thoat(noi(g) || "không ghi nơi")} · ${gia(g)} · ${han(g)}</div>
       <div class="mot-dong ${k}">${thoat(du.mot_dong ?? "Máy chưa đọc xong gói này")}</div>
       ${du.sua_doi ? `<div class="sua-doi ${du.sua_doi.co_do ? "co-do" : ""}">${du.sua_doi.co_do ? "🚩 " : ""}${thoat(du.sua_doi.cau)}</div>` : ""}
       ${nutPhanHoi({ ...g, phan_hoi: du.phan_hoi })}
@@ -439,6 +472,7 @@
           dsGoi = veDanhSach(du);
         }
         daTai = khoaDs;
+        locTim();
       } catch (e) {
         if (lan !== lanTai) return;
         ds.innerHTML = `<div class="bao loi">Không tải được: ${thoat(e.message)}</div>`;
@@ -534,6 +568,7 @@
   $("truoc").onclick = () => datHash({ ngay: congNgay($("chon-ngay").value || homNayVN(), -1), goi: "" });
   $("sau").onclick = () => datHash({ ngay: congNgay($("chon-ngay").value || homNayVN(), 1), goi: "" });
   $("chon-ngay").onchange = (e) => e.target.value && datHash({ ngay: e.target.value, goi: "" });
+  $("tim").oninput = locTim;
   addEventListener("hashchange", tai);
   // Đổi cỡ màn hình qua mốc 720px → vẽ lại (nhóm thu gọn và bảng kiểm khác nhau giữa hai bản).
   matchMedia("(max-width: 720px)").addEventListener("change", () => { daTai = null; tai(); });
