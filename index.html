@@ -226,6 +226,7 @@
   }
   const noi = (g) => (g.dia_diem ?? []).map((d) => d.replace(/^(Tỉnh|Thành phố)\s+/, "")).join(", ");
   const lucVN = (iso) => new Date(Date.parse(iso) + 7 * 3600e3).toISOString();
+  const linkDrive = (g) => "https://drive.google.com/drive/search?" + new URLSearchParams({ q: g.ma_tbmt });
   const linkHoSo = (g) => "https://muasamcong.mpi.gov.vn/web/guest/contractor-selection?" + new URLSearchParams({
     p_p_id: "egpportalcontractorselectionv2_WAR_egpportalcontractorselectionv2", p_p_lifecycle: "0",
     p_p_state: "normal", p_p_mode: "view",
@@ -467,6 +468,10 @@
     const k = du.nhom_hien_thi ?? "can_xem";
     const dt = laDienThoai();
     const tai = du.tai_file?.mo_ta ? ` · ${thoat(du.tai_file.mo_ta)}` : "";
+    // Ticket 25: thư mục gói trên Drive tên bắt đầu bằng mã TBMT → link tìm theo mã (không dùng Drive API).
+    // Chỉ máy tính (thư mục đồng bộ qua Drive for desktop của Sơn), chỉ khi đã tải.
+    const drive = !dt && du.tai_file?.trang_thai === "da_tai"
+      ? ` · <a href="${thoat(linkDrive(g))}" target="_blank" rel="noopener">Mở thư mục trên Drive</a>` : "";
     $("ct").innerHTML = `<button class="dong-x" id="dong-ct">Đóng ✕</button>
       <span class="chip ${k}">${TEN_NHOM[k]}</span>${g.phien_ban !== "00" ? ` <span class="sua">sửa đổi ${thoat(g.phien_ban)}</span>` : ""}
       <div class="ten-goi">${thoat(g.ten)}</div>
@@ -480,7 +485,7 @@
       ${dt && du.bang_kiem ? `<div class="ghi">Xem nguyên văn hồ sơ và ảnh chụp: mở trên máy tính.</div>` : ""}
       ${du.ban_cu ? `<details class="ban-cu"><summary>Bản trước (lần ${thoat(du.ban_cu.phien_ban)}): ${thoat(TEN_NHOM[du.ban_cu.nhom_hien_thi] ?? "")}</summary>
         <div class="meta">${thoat(du.ban_cu.mot_dong ?? "")}</div>${bangKiem({ bang_kiem: du.ban_cu.bang_kiem }, { chiLoi: dt })}</details>` : ""}
-      <div class="ghi"><a href="${thoat(linkHoSo(g))}" target="_blank" rel="noopener">Mở hồ sơ trên muasamcong</a>${tai}</div>`;
+      <div class="ghi"><a href="${thoat(linkHoSo(g))}" target="_blank" rel="noopener">Mở hồ sơ trên muasamcong</a>${drive}${tai}</div>`;
     $("ct").classList.remove("trong");
     $("ct").scrollTop = 0;
   }
